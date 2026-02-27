@@ -1,6 +1,4 @@
-# tauristore
-
-Fine-grained, class-based state management for **Tauri + React** apps.
+class-based state management for **React** apps.
 
 ```
 Stores are Classes → State is Atoms → Actions are Methods → DB stays in sync
