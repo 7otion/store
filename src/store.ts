@@ -1,5 +1,5 @@
 import { Atom } from './atom';
-import { Computed, makeComputed } from './computed';
+import { Computed, makeComputed, type ComputedOptions } from './computed';
 
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
@@ -69,8 +69,12 @@ export abstract class Store {
 	 *   () => `${this.firstName.value} ${this.lastName.value}`
 	 * );
 	 */
-	protected computed<T>(deps: AnyAtom[], compute: () => T): Computed<T> {
-		return makeComputed(deps, compute);
+	protected computed<T>(
+		deps: AnyAtom[],
+		compute: () => T,
+		options?: ComputedOptions<T>,
+	): Computed<T> {
+		return makeComputed(deps, compute, options);
 	}
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────

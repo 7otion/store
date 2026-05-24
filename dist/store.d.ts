@@ -1,5 +1,5 @@
 import { Atom } from './atom';
-import { Computed } from './computed';
+import { Computed, type ComputedOptions } from './computed';
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
 export type StoreStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -59,7 +59,7 @@ export declare abstract class Store {
      *   () => `${this.firstName.value} ${this.lastName.value}`
      * );
      */
-    protected computed<T>(deps: AnyAtom[], compute: () => T): Computed<T>;
+    protected computed<T>(deps: AnyAtom[], compute: () => T, options?: ComputedOptions<T>): Computed<T>;
     /**
      * Called when the store is initialised (e.g. via `StoreRegistry.init()`).
      * Override to load initial data from a database or external source.

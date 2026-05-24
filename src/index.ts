@@ -2,8 +2,8 @@
 export { Atom } from './atom';
 export type { Unsubscribe, Listener, Updater, AtomValue } from './atom';
 
-export { Computed } from './computed';
-export type { ComputedValue } from './computed';
+export { Computed, shallowEqual } from './computed';
+export type { ComputedValue, ComputedOptions, EqualFn } from './computed';
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 export { Store } from './store';
