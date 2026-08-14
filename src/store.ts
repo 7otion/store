@@ -1,132 +1,150 @@
-import { Atom } from './atom';
-import { Computed, makeComputed, type ComputedOptions } from './computed';
+import { Atom, type AtomOptions } from './atom';
+import { Computed, type ComputedOptions } from './computed';
+import {
+	type EffectCleanup,
+	type EffectOptions,
+	effect as createEffect,
+} from './effect';
+import { Derived, ReactiveNode, type Unsubscribe } from './graph';
 
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
+type AnyNode = ReactiveNode<unknown>;
 
-export type StoreStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-/**
- * Base class for all stores.
- *
- * ## Anatomy of a Store
- *
- * ```ts
- * class TodoStore extends Store {
- *   // ── State (reactive) ──────────────────────────────
- *   readonly todos    = this.atom<Todo[]>([]);
- *   readonly filter   = this.atom<Filter>("all");
- *   readonly loading  = this.atom(false);
- *
- *   // ── Computed (derived, read-only) ─────────────────
- *   readonly filtered = this.computed(
- *     [this.todos, this.filter],
- *     () => applyFilter(this.todos.value, this.filter.value)
- *   );
- *
- *   // ── Internal (non-reactive) ───────────────────────
- *   private _cache = new Map<string, Todo>();
- *
- *   // ── Actions (public methods) ──────────────────────
- *   async fetchTodos() { ... }
- *   addTodo(text: string) { ... }
- * }
- * ```
- *
- * ## Repository Pattern
- *
- * Override `onInit` / `onDestroy` for DB bootstrap / cleanup:
- *
- * ```ts
- * protected async onInit() {
- *   const rows = await db.select<Todo[]>("SELECT * FROM todos");
- *   this.todos.set(rows);
- * }
- * ```
- */
+/** Base class for stores: owns atoms, computeds, effects and actions. */
 export abstract class Store {
-	// ─── Atom factory ────────────────────────────────────────────────────────
+	private _effects: Unsubscribe[] = [];
+	private _families: Map<unknown, Computed<unknown>>[] = [];
+	private _namesHydrated = false;
 
-	/**
-	 * Creates a reactive atom. Call this in a property initializer.
-	 * The atom's name is inferred via Object.defineProperty in the constructor.
-	 */
-	protected atom<T>(initialValue: T): Atom<T> {
-		return new Atom<T>(initialValue);
+	// ─── Factories ───────────────────────────────────────────────────────────
+
+	protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T> {
+		return new Atom<T>(initialValue, options);
 	}
 
-	// ─── Computed factory ─────────────────────────────────────────────────────
-
-	/**
-	 * Creates a derived computed value from one or more atoms.
-	 *
-	 * @param deps   Atoms this value depends on
-	 * @param compute Pure function that derives the new value
-	 *
-	 * @example
-	 * readonly fullName = this.computed(
-	 *   [this.firstName, this.lastName],
-	 *   () => `${this.firstName.value} ${this.lastName.value}`
-	 * );
-	 */
+	/** Lazy, and tracked by what the function reads. */
 	protected computed<T>(
-		deps: AnyAtom[],
 		compute: () => T,
 		options?: ComputedOptions<T>,
 	): Computed<T> {
-		return makeComputed(deps, compute, options);
+		return new Computed<T>(compute, options);
 	}
 
-	// ─── Lifecycle ────────────────────────────────────────────────────────────
+	/** Stopped on destroy. Create in `onInit`, not in a field initializer. */
+	protected effect(
+		fn: () => EffectCleanup,
+		options?: EffectOptions,
+	): Unsubscribe {
+		const stop = createEffect(fn, options);
+		this._effects.push(stop);
+		return stop;
+	}
 
-	/**
-	 * Called when the store is initialised (e.g. via `StoreRegistry.init()`).
-	 * Override to load initial data from a database or external source.
-	 */
+	/** A computed per key, created on demand and cached until destroy. */
+	protected family<K, T>(
+		compute: (key: K) => T,
+		options?: ComputedOptions<T>,
+	): Family<K, T> {
+		const cache = new Map<K, Computed<T>>();
+		this._families.push(cache as Map<unknown, Computed<unknown>>);
+
+		const family = (key: K): Computed<T> => {
+			let node = cache.get(key);
+			if (!node) {
+				node = new Computed<T>(() => compute(key), {
+					...options,
+					name: `${options?.name ?? 'family'}[${String(key)}]`,
+				});
+				cache.set(key, node);
+			}
+			return node;
+		};
+
+		family.delete = (key: K): boolean => {
+			const node = cache.get(key);
+			if (!node) return false;
+			node.dispose();
+			return cache.delete(key);
+		};
+		family.clear = (): void => {
+			for (const node of cache.values()) node.dispose();
+			cache.clear();
+		};
+		Object.defineProperty(family, 'size', { get: () => cache.size });
+
+		return family as Family<K, T>;
+	}
+
+	// ─── Lifecycle ───────────────────────────────────────────────────────────
+
 	protected async onInit(): Promise<void> {}
 
-	/**
-	 * Called when the store is destroyed.
-	 * Override to cancel subscriptions, close DB connections, etc.
-	 */
 	protected async onDestroy(): Promise<void> {}
 
-	/** @internal — called by StoreRegistry */
+	/** @internal */
 	async _init(): Promise<void> {
+		this._hydrateNames();
 		await this.onInit();
 	}
 
-	/** @internal — called by StoreRegistry */
+	/** @internal */
 	async _destroy(): Promise<void> {
 		await this.onDestroy();
-		this._disposeComputeds();
+
+		for (const stop of this._effects.splice(0)) stop();
+		for (const cache of this._families) {
+			for (const node of cache.values()) node.dispose();
+			cache.clear();
+		}
+		for (const [, node] of this._ownNodes()) {
+			if (node instanceof Derived) node.dispose();
+		}
 	}
 
-	private _disposeComputeds(): void {
+	// ─── Internal ────────────────────────────────────────────────────────────
+
+	/** Read via descriptors so user-defined getters are not invoked. */
+	private *_ownNodes(): Generator<[string, AnyNode]> {
 		for (const key of Object.getOwnPropertyNames(this)) {
-			const val = (this as Record<string, unknown>)[key];
-			if (val instanceof Computed) {
-				val.dispose();
-			}
+			const value = Object.getOwnPropertyDescriptor(this, key)?.value;
+			if (value instanceof ReactiveNode) yield [key, value as AnyNode];
+		}
+	}
+
+	/** Lazy: class field initializers run after the base constructor. */
+	private _hydrateNames(): void {
+		if (this._namesHydrated) return;
+		this._namesHydrated = true;
+		for (const [key, node] of this._ownNodes()) {
+			node._setName(`${this.constructor.name}.${key}`);
 		}
 	}
 }
 
+// ─── Family ───────────────────────────────────────────────────────────────────
+
+export interface Family<K, T> {
+	(key: K): Computed<T>;
+	/** Drops and disposes one key's node. */
+	delete(key: K): boolean;
+	/** Drops and disposes every cached node. */
+	clear(): void;
+	readonly size: number;
+}
+
 // ─── Type utilities ───────────────────────────────────────────────────────────
 
-/** Extract all Atom properties from a Store as a mapped type */
 export type StoreAtoms<S extends Store> = {
 	[K in keyof S as S[K] extends AnyAtom ? K : never]: S[K];
 };
 
-/** Extract all Computed properties from a Store as a mapped type */
 export type StoreComputeds<S extends Store> = {
 	[K in keyof S as S[K] extends AnyComputed ? K : never]: S[K];
 };
 
-/** Extract all action (function) properties from a Store */
 export type StoreActions<S extends Store> = {
-	[K in keyof S as S[K] extends (...args: unknown[]) => unknown
-		? K
-		: never]: S[K];
+	[
+		K in keyof S as S[K] extends (...args: unknown[]) => unknown ? K : never
+	]: S[K];
 };

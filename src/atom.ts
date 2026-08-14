@@ -1,93 +1,67 @@
-import { scheduleNotify } from './batch';
+import {
+	DIRTY,
+	type EqualFn,
+	ReactiveNode,
+	enqueue,
+	flush,
+	track,
+} from './graph';
 
-export type Unsubscribe = () => void;
-export type Listener = () => void;
+export type { Unsubscribe, Listener, EqualFn } from './graph';
+
 export type Updater<T> = T | ((prev: T) => T);
 
-function isUpdaterFn<T>(v: Updater<T>): v is (prev: T) => T {
-	return typeof v === 'function';
+export interface AtomOptions<T> {
+	/** Decides whether a write is a change. Defaults to `Object.is`. */
+	equals?: EqualFn<T>;
+	name?: string;
 }
 
-/**
- * A fine-grained reactive container for a single value.
- *
- * Atoms are the state variables in a Store. Setting their value
- * notifies only the subscribers watching that specific atom,
- * giving you precise control over re-renders.
- *
- * You never construct Atoms directly — use `this.atom()` inside a Store.
- */
-export class Atom<T> {
+/** A reactive value. Construct with `this.atom()` inside a Store. */
+export class Atom<T> extends ReactiveNode<T> {
 	/** @internal */
 	readonly _type = 'atom' as const;
-	private _value: T;
-	private _listeners = new Set<Listener>();
-	private _name: string;
 
-	constructor(initialValue: T, name = 'atom') {
+	private _equals: EqualFn<T>;
+
+	constructor(initialValue: T, options?: AtomOptions<T>) {
+		super(options?.name ?? 'atom');
 		this._value = initialValue;
-		this._name = name;
+		this._equals = options?.equals ?? Object.is;
 	}
 
-	get name(): string {
-		return this._name;
-	}
+	_update(): void {}
 
 	// ─── Read ────────────────────────────────────────────────────────────────
 
-	/** Current value — prefer this inside store actions. */
 	get value(): T {
-		return this._value;
-	}
-
-	/** Alias for `.value` — useful in non-reactive contexts. */
-	get(): T {
+		track(this);
 		return this._value;
 	}
 
 	// ─── Write ───────────────────────────────────────────────────────────────
 
-	/** Direct assignment — use inside store actions. */
+	/** Stores a function as the value rather than calling it, unlike {@link set}. */
 	set value(next: T) {
-		if (Object.is(this._value, next)) return;
+		if (this._equals(this._value, next)) return;
+
 		this._value = next;
-		this._flush();
+		this._version++;
+
+		for (const observer of this._observers) observer._markStale(DIRTY);
+		if (this._watched) enqueue(this);
+
+		flush();
 	}
 
-	/**
-	 * Functional or direct update — safe for derived values.
-	 * @example atom.set(prev => [...prev, newItem])
-	 */
+	/** A function argument is always an updater; assign `.value` to store one. */
 	set(updater: Updater<T>): void {
-		const next = isUpdaterFn(updater) ? updater(this._value) : updater;
+		const next =
+			typeof updater === 'function'
+				? (updater as (prev: T) => T)(this._value)
+				: updater;
 		this.value = next;
-	}
-
-	// ─── Subscriptions ───────────────────────────────────────────────────────
-
-	subscribe(listener: Listener): Unsubscribe {
-		this._listeners.add(listener);
-		return () => {
-			this._listeners.delete(listener);
-		};
-	}
-
-	/** Number of active subscribers — useful for debugging. */
-	get listenerCount(): number {
-		return this._listeners.size;
-	}
-
-	// ─── Internal ─────────────────────────────────────────────────────────────
-
-	private _flush(): void {
-		// Snapshot listeners before scheduling so late-added ones aren't called
-		const snapshot = [...this._listeners];
-		scheduleNotify(() => snapshot.forEach(l => l()));
 	}
 }
 
-/**
- * Type helper — strips the Atom wrapper to get the underlying value type.
- * @example type MyValue = AtomValue<Atom<string>> // string
- */
 export type AtomValue<A> = A extends Atom<infer T> ? T : never;

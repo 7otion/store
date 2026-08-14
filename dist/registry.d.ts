@@ -2,80 +2,48 @@ import React, { ReactNode } from 'react';
 import { Store } from './store';
 type StoreKey = string | symbol;
 type StoreConstructor<S extends Store> = new () => S;
-/**
- * Central registry for store instances.
- *
- * Stores are lazily instantiated and cached. Use the singleton `registry`
- * export for app-wide stores, or create a new `StoreRegistry` for
- * scoped/isolated contexts (e.g. per-window in Tauri).
- */
+/** Owns store instances and their init/destroy lifecycle. */
 export declare class StoreRegistry {
     private _stores;
     private _initialized;
-    /**
-     * Register a pre-constructed store instance.
-     *
-     * @example
-     * registry.register("todos", new TodoStore());
-     */
+    /** Live `StoreProvider`s holding this registry open. */
+    private _refCount;
+    /** In-flight `initAll()`, awaited before teardown. */
+    private _initPromise;
+    /** Identity token for a scheduled teardown, so a re-retain can cancel it. */
+    private _pendingRelease;
     register<S extends Store>(key: StoreKey, store: S): S;
-    /**
-     * Get-or-create a store by constructor.
-     * Instantiates once and caches by constructor reference.
-     *
-     * @example
-     * const todos = registry.getOrCreate(TodoStore);
-     */
+    /** Instantiates once, cached by constructor reference. */
     getOrCreate<S extends Store>(Ctor: StoreConstructor<S>): S;
-    /**
-     * Retrieve a registered store by key. Throws if not found.
-     */
+    /** Throws if the key is not registered. */
     get<S extends Store>(key: StoreKey): S;
     has(key: StoreKey): boolean;
-    /**
-     * Initialize all registered stores (calls `onInit` lifecycle hook).
-     * Safe to call multiple times — already-initialized stores are skipped.
-     */
+    get stores(): readonly Store[];
+    /** Idempotent. A store whose `onInit` rejects is left uninitialized. */
     initAll(): Promise<void>;
-    /**
-     * Initialize a single store by key.
-     */
     init(key: StoreKey): Promise<void>;
-    /**
-     * Destroy all stores and clean up resources.
-     */
+    /** Keeps registrations, so the registry can be initialized again. */
     destroyAll(): Promise<void>;
+    /** Destroys every store and drops all registrations. */
+    clear(): Promise<void>;
+    /** @internal */
+    _retain(): Promise<void>;
+    /** @internal */
+    _release(): void;
+    /** @internal */
+    get _providerCount(): number;
 }
-/** App-wide singleton registry */
 export declare const registry: StoreRegistry;
 interface StoreProviderProps {
     children: ReactNode;
-    /** Pass a custom registry for isolated contexts. Defaults to the global `registry`. */
+    /** Defaults to the global `registry`. */
     registry?: StoreRegistry;
-    /** If true, calls `registry.initAll()` on mount and `registry.destroyAll()` on unmount. */
+    /** Initializes registered stores on mount, destroys them on unmount. */
     autoInit?: boolean;
 }
-/**
- * Provides a StoreRegistry to the React tree.
- *
- * @example
- * <StoreProvider autoInit>
- *   <App />
- * </StoreProvider>
- */
 export declare function StoreProvider({ children, registry: customRegistry, autoInit, }: StoreProviderProps): React.FunctionComponentElement<React.ProviderProps<StoreRegistry>>;
-/**
- * Access the nearest StoreRegistry from context.
- */
 export declare function useRegistry(): StoreRegistry;
-/**
- * Get a store from the registry by constructor.
- * The store is created if it doesn't exist yet.
- *
- * @example
- * const todoStore = useRegisteredStore(TodoStore);
- * const todos = useAtom(todoStore.todos);
- */
+/** Creates the store if the registry does not have it yet. */
 export declare function useRegisteredStore<S extends Store>(Ctor: StoreConstructor<S>): S;
 export {};
 //# sourceMappingURL=registry.d.ts.map

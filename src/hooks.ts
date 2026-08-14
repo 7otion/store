@@ -1,139 +1,145 @@
 import {
-	useEffect,
-	useReducer,
-	useRef,
-	useState,
 	useCallback,
 	useDebugValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
 } from 'react';
-import { Atom } from './atom';
-import { Computed } from './computed';
+import type { Atom, Updater } from './atom';
+import type { EqualFn, ReactiveNode } from './graph';
 
-type Readable<T> = Atom<T> | Computed<T>;
+type Readable<T> = ReactiveNode<T>;
 
-// ─── Core: useAtom ────────────────────────────────────────────────────────────
+type Values<T extends readonly Readable<unknown>[]> = {
+	[K in keyof T]: T[K] extends Readable<infer V> ? V : never;
+};
 
-/**
- * Subscribe to an Atom or Computed value.
- * The component re-renders only when this specific atom changes.
- *
- * @example
- * const todos = useAtom(store.todos);
- * const count = useAtom(store.totalCount); // Computed
- */
-export function useAtom<T>(atom: Readable<T>): T {
-	// Use a version counter to force renders — avoids stale closure issues
-	const [, rerender] = useReducer((n: number) => n + 1, 0);
+// ─── useAtom ──────────────────────────────────────────────────────────────────
 
-	useEffect(() => {
-		// Sync check in case atom changed between render and effect
-		rerender();
-		return atom.subscribe(rerender);
-	}, [atom]);
+/** Subscribes to an Atom or Computed. */
+export function useAtom<T>(node: Readable<T>): T {
+	const subscribe = useCallback(
+		(onChange: () => void) => node.subscribe(onChange),
+		[node],
+	);
+	const getSnapshot = useCallback(() => node.peek(), [node]);
 
-	useDebugValue(atom.value);
-	return atom.value;
+	const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	useDebugValue(value);
+	return value;
 }
 
-// ─── useAtomSelector ─────────────────────────────────────────────────────────
+// ─── useAtomState ─────────────────────────────────────────────────────────────
 
-/**
- * Subscribe to a slice of an Atom's value.
- * The component only re-renders when the *selected* value changes (via Object.is).
- *
- * @example
- * const firstTodo = useAtomSelector(store.todos, (todos) => todos[0]);
- * const count     = useAtomSelector(store.todos, (todos) => todos.length);
- */
-export function useAtomSelector<T, R>(
-	atom: Readable<T>,
-	selector: (value: T) => R,
-	isEqual: (a: R, b: R) => boolean = Object.is,
-): R {
-	const [selected, setSelected] = useState<R>(() => selector(atom.value));
-	const prevRef = useRef<R>(selected);
-
-	useEffect(() => {
-		// Sync on mount/atom change
-		const synced = selector(atom.value);
-		if (!isEqual(prevRef.current, synced)) {
-			prevRef.current = synced;
-			// eslint-disable-next-line react-hooks/set-state-in-effect
-			setSelected(synced);
-		}
-
-		return atom.subscribe(() => {
-			const next = selector(atom.value);
-			if (!isEqual(prevRef.current, next)) {
-				prevRef.current = next;
-				setSelected(next);
-			}
-		});
-	}, [atom, selector, isEqual]);
-
-	return selected;
+/** Reads and writes an Atom, like `useState` against shared state. */
+export function useAtomState<T>(
+	atom: Atom<T>,
+): [T, (updater: Updater<T>) => void] {
+	return [useAtom(atom), useAtomSet(atom)];
 }
 
 // ─── useAtomSet ───────────────────────────────────────────────────────────────
 
-/**
- * Returns a stable setter for an Atom.
- * Does NOT subscribe to the atom — the component won't re-render on changes.
- * Useful for write-only components (forms, buttons).
- *
- * @example
- * const setFilter = useAtomSet(store.filter);
- * <button onClick={() => setFilter("active")}>Active</button>
- */
-export function useAtomSet<T>(
-	atom: Atom<T>,
-): (updater: T | ((prev: T) => T)) => void {
-	return useCallback(updater => atom.set(updater), [atom]);
+/** A stable setter that does not subscribe. */
+export function useAtomSet<T>(atom: Atom<T>): (updater: Updater<T>) => void {
+	return useCallback((updater: Updater<T>) => atom.set(updater), [atom]);
+}
+
+// ─── useAtomSelector ──────────────────────────────────────────────────────────
+
+/** Subscribes to a slice, re-rendering only when the selected value changes. */
+export function useAtomSelector<T, R>(
+	node: Readable<T>,
+	selector: (value: T) => R,
+	isEqual: EqualFn<R> = Object.is,
+): R {
+	// `selector` and `isEqual` are kept out of the subscription's deps, so an
+	// inline one costs a re-selection rather than a re-subscription.
+	const subscribe = useCallback(
+		(onChange: () => void) => node.subscribe(onChange),
+		[node],
+	);
+
+	const getSelection = useMemo(() => {
+		let hasMemo = false;
+		let memoSource: T;
+		let memoResult: R;
+
+		return (): R => {
+			const source = node.peek();
+			if (hasMemo && Object.is(memoSource, source)) return memoResult;
+
+			const next = selector(source);
+			memoSource = source;
+			if (hasMemo && isEqual(memoResult, next)) return memoResult;
+
+			hasMemo = true;
+			memoResult = next;
+			return next;
+		};
+	}, [node, selector, isEqual]);
+
+	const value = useSyncExternalStore(subscribe, getSelection, getSelection);
+	useDebugValue(value);
+	return value;
 }
 
 // ─── useAtoms ─────────────────────────────────────────────────────────────────
 
-/**
- * Subscribe to multiple atoms at once.
- * Re-renders only when any of the watched atoms change.
- * Returns values in the same order as the input atoms.
- *
- * @example
- * const [todos, filter, loading] = useAtoms(
- *   store.todos,
- *   store.filter,
- *   store.loading
- * );
- */
+/** Subscribes to several nodes, returning their values in order. */
 export function useAtoms<T extends readonly Readable<unknown>[]>(
-	...atoms: T
-): { [K in keyof T]: T[K] extends Readable<infer V> ? V : never } {
-	const [, rerender] = useReducer((n: number) => n + 1, 0);
+	...nodes: T
+): Values<T> {
+	const stable = useStableNodes(nodes);
 
-	useEffect(() => {
-		rerender();
-		const unsubs = atoms.map(a => a.subscribe(rerender));
-		return () => unsubs.forEach(u => u());
-	}, atoms);
+	const subscribe = useCallback(
+		(onChange: () => void) => {
+			const unsubscribes = stable.map(node => node.subscribe(onChange));
+			return () => {
+				for (const unsubscribe of unsubscribes) unsubscribe();
+			};
+		},
+		[stable],
+	);
 
-	return atoms.map(a => a.value) as {
-		[K in keyof T]: T[K] extends Readable<infer V> ? V : never;
-	};
+	const getSnapshot = useMemo(() => {
+		let last: unknown[] | null = null;
+		return (): unknown[] => {
+			const next = stable.map(node => node.peek());
+			// uSES compares snapshots by identity.
+			if (
+				last !== null &&
+				last.length === next.length &&
+				last.every((value, i) => Object.is(value, next[i]))
+			) {
+				return last;
+			}
+			last = next;
+			return next;
+		};
+	}, [stable]);
+
+	const values = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	useDebugValue(values);
+	return values as Values<T>;
+}
+
+/** Collapses the rest argument to a stable identity; tolerates a varying length. */
+function useStableNodes<T extends readonly Readable<unknown>[]>(nodes: T): T {
+	const ref = useRef<T>(nodes);
+	const previous = ref.current;
+	const changed =
+		previous.length !== nodes.length ||
+		previous.some((node, i) => node !== nodes[i]);
+	if (changed) ref.current = nodes;
+	return ref.current;
 }
 
 // ─── useStoreAction ───────────────────────────────────────────────────────────
 
-/**
- * Returns a store action wrapped in a loading/error state tracker.
- * Useful for async actions that need to show loading spinners or error messages.
- *
- * @example
- * const { run: fetchTodos, loading, error } = useStoreAction(store.fetchTodos.bind(store));
- *
- * <button onClick={() => fetchTodos()} disabled={loading}>
- *   {loading ? "Loading..." : "Fetch"}
- * </button>
- */
+/** Wraps an async action in loading/error state. `run` is stable. */
 export function useStoreAction<Args extends unknown[], R>(
 	action: (...args: Args) => Promise<R>,
 ): {
@@ -144,8 +150,8 @@ export function useStoreAction<Args extends unknown[], R>(
 } {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
-	const mountedRef = useRef(true);
 
+	const mountedRef = useRef(true);
 	useEffect(() => {
 		mountedRef.current = true;
 		return () => {
@@ -153,26 +159,24 @@ export function useStoreAction<Args extends unknown[], R>(
 		};
 	}, []);
 
-	const run = useCallback(
-		async (...args: Args): Promise<R | undefined> => {
-			setLoading(true);
-			setError(null);
-			try {
-				const result = await action(...args);
-				if (mountedRef.current) setLoading(false);
-				return result;
-			} catch (err) {
-				if (mountedRef.current) {
-					setLoading(false);
-					setError(
-						err instanceof Error ? err : new Error(String(err)),
-					);
-				}
-				return undefined;
+	const actionRef = useRef(action);
+	actionRef.current = action;
+
+	const run = useCallback(async (...args: Args): Promise<R | undefined> => {
+		setLoading(true);
+		setError(null);
+		try {
+			const result = await actionRef.current(...args);
+			if (mountedRef.current) setLoading(false);
+			return result;
+		} catch (err) {
+			if (mountedRef.current) {
+				setLoading(false);
+				setError(err instanceof Error ? err : new Error(String(err)));
 			}
-		},
-		[action],
-	);
+			return undefined;
+		}
+	}, []);
 
 	const reset = useCallback(() => {
 		setLoading(false);

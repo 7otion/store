@@ -15,24 +15,44 @@
 	"keywords": [
 		"store",
 		"react",
-		"state management"
+		"state management",
+		"signals",
+		"reactive"
 	],
 	"license": "MIT",
+	"sideEffects": false,
 	"scripts": {
-		"build": "rm -rf dist && tsc --emitDeclarationOnly && node build.mjs",
+		"build": "bun build.mjs",
 		"watch": "tsc --watch --preserveWatchOutput",
+		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"format": "bunx prettier --write '**/*.{js,jsx,ts,tsx,json,css}' --ignore-path .prettierignore"
 	},
 	"main": "dist/index.js",
+	"module": "dist/index.mjs",
 	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"devDependencies": {
+		"@testing-library/react": "^16.3.0",
 		"@types/react": "^19.2.5",
 		"@types/react-dom": "^19.2.3",
 		"esbuild": "^0.27.3",
-		"typescript": "^6.0.3"
+		"happy-dom": "^20.0.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"typescript": "^6.0.3",
+		"vitest": "^3.2.4"
 	},
 	"peerDependencies": {
-		"react": "^19",
-		"react-dom": "^19"
+		"react": "^18 || ^19"
 	}
 }

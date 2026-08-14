@@ -1,42 +1,23 @@
-export type Unsubscribe = () => void;
-export type Listener = () => void;
+import { type EqualFn, ReactiveNode } from './graph';
+export type { Unsubscribe, Listener, EqualFn } from './graph';
 export type Updater<T> = T | ((prev: T) => T);
-/**
- * A fine-grained reactive container for a single value.
- *
- * Atoms are the state variables in a Store. Setting their value
- * notifies only the subscribers watching that specific atom,
- * giving you precise control over re-renders.
- *
- * You never construct Atoms directly — use `this.atom()` inside a Store.
- */
-export declare class Atom<T> {
+export interface AtomOptions<T> {
+    /** Decides whether a write is a change. Defaults to `Object.is`. */
+    equals?: EqualFn<T>;
+    name?: string;
+}
+/** A reactive value. Construct with `this.atom()` inside a Store. */
+export declare class Atom<T> extends ReactiveNode<T> {
     /** @internal */
     readonly _type: "atom";
-    private _value;
-    private _listeners;
-    private _name;
-    constructor(initialValue: T, name?: string);
-    get name(): string;
-    /** Current value — prefer this inside store actions. */
+    private _equals;
+    constructor(initialValue: T, options?: AtomOptions<T>);
+    _update(): void;
     get value(): T;
-    /** Alias for `.value` — useful in non-reactive contexts. */
-    get(): T;
-    /** Direct assignment — use inside store actions. */
+    /** Stores a function as the value rather than calling it, unlike {@link set}. */
     set value(next: T);
-    /**
-     * Functional or direct update — safe for derived values.
-     * @example atom.set(prev => [...prev, newItem])
-     */
+    /** A function argument is always an updater; assign `.value` to store one. */
     set(updater: Updater<T>): void;
-    subscribe(listener: Listener): Unsubscribe;
-    /** Number of active subscribers — useful for debugging. */
-    get listenerCount(): number;
-    private _flush;
 }
-/**
- * Type helper — strips the Atom wrapper to get the underlying value type.
- * @example type MyValue = AtomValue<Atom<string>> // string
- */
 export type AtomValue<A> = A extends Atom<infer T> ? T : never;
 //# sourceMappingURL=atom.d.ts.map

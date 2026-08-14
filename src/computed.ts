@@ -1,27 +1,12 @@
-import { Atom, type Listener, type Unsubscribe } from './atom';
-import { scheduleNotify } from './batch';
-
-type AnyAtom = Atom<any>;
-
-export type EqualFn<T> = (prev: T, next: T) => boolean;
+import { Derived, type EqualFn } from './graph';
 
 export interface ComputedOptions<T> {
-	equal?: EqualFn<T>;
+	/** Decides whether a recomputed result is a change. Defaults to `Object.is`. */
+	equals?: EqualFn<T>;
 	name?: string;
 }
 
-/**
- * Shallow equality — compares one level of object keys by Object.is.
- * Use as the `equal` option when your compute function returns a plain object
- * so the computed only notifies when a property actually changes value.
- *
- * @example
- * readonly current = this.computed(
- *   [this.name, this.tags],
- *   () => ({ name: this.name.get(), tags: this.tags.get() }),
- *   { equal: shallowEqual }
- * );
- */
+/** Compares one level of object keys by `Object.is`. */
 export function shallowEqual<T>(a: T, b: T): boolean {
 	if (Object.is(a, b)) return true;
 	if (
@@ -31,86 +16,55 @@ export function shallowEqual<T>(a: T, b: T): boolean {
 		b === null
 	)
 		return false;
+
 	const keysA = Object.keys(a as object);
 	const keysB = Object.keys(b as object);
 	if (keysA.length !== keysB.length) return false;
 	for (const key of keysA) {
-		if (!Object.is((a as any)[key], (b as any)[key])) return false;
+		if (!Object.is((a as never)[key], (b as never)[key])) return false;
 	}
 	return true;
 }
 
 /**
- * A read-only reactive value derived from one or more Atoms.
- * Automatically recomputes when any dependency changes.
- *
- * You never construct Computed directly — use `this.computed()` inside a Store.
+ * A lazy derived value. Dependencies are whatever the function reads.
+ * Construct with `this.computed()` inside a Store.
  */
-export class Computed<T> {
+export class Computed<T> extends Derived<T> {
 	/** @internal */
 	readonly _type = 'computed' as const;
 
-	private _value: T;
-	private _listeners = new Set<Listener>();
-	private _cleanup: Unsubscribe[] = [];
-	private _name: string;
-	private _equal: EqualFn<T>;
+	private _compute: () => T;
+	private _equals: EqualFn<T>;
+	private _initialized = false;
 
-	constructor(
-		deps: AnyAtom[],
-		compute: () => T,
-		options?: ComputedOptions<T>,
-	) {
-		this._name = options?.name ?? 'computed';
-		this._equal = options?.equal ?? Object.is;
-		this._value = compute();
-
-		this._cleanup = deps.map(dep =>
-			dep.subscribe(() => {
-				const next = compute();
-				if (this._equal(this._value, next)) return;
-				this._value = next;
-				const snapshot = [...this._listeners];
-				scheduleNotify(() => snapshot.forEach(l => l()));
-			}),
-		);
+	constructor(compute: () => T, options?: ComputedOptions<T>) {
+		super(options?.name ?? 'computed');
+		this._compute = compute;
+		this._equals = options?.equals ?? Object.is;
 	}
 
-	get name(): string {
-		return this._name;
+	protected _run(): void {
+		const next = this._compute();
+
+		if (!this._initialized) {
+			this._initialized = true;
+			this._value = next;
+			this._version++;
+			return;
+		}
+
+		// Holding the version still stops propagation at this node.
+		if (!this._equals(this._value, next)) {
+			this._value = next;
+			this._version++;
+		}
 	}
 
-	get value(): T {
-		return this._value;
+	override dispose(): void {
+		super.dispose();
+		this._initialized = false;
 	}
-
-	get(): T {
-		return this._value;
-	}
-
-	subscribe(listener: Listener): Unsubscribe {
-		this._listeners.add(listener);
-		return () => {
-			this._listeners.delete(listener);
-		};
-	}
-
-	/** Release dependency subscriptions. Called automatically by Store.destroy(). */
-	dispose(): void {
-		this._cleanup.forEach(u => u());
-		this._cleanup = [];
-		this._listeners.clear();
-	}
-}
-
-// ─── Builder helpers (used internally by Store) ───────────────────────────────
-
-export function makeComputed<T>(
-	deps: AnyAtom[],
-	compute: () => T,
-	options?: ComputedOptions<T>,
-): Computed<T> {
-	return new Computed(deps, compute, options);
 }
 
 export type ComputedValue<C> = C extends Computed<infer T> ? T : never;

@@ -1,27 +1,27 @@
+// ─── Reactive graph ───────────────────────────────────────────────────────────
+export { batch, untrack } from './graph';
+export type { Unsubscribe, Listener, EqualFn } from './graph';
+
 // ─── Primitives ───────────────────────────────────────────────────────────────
 export { Atom } from './atom';
-export type { Unsubscribe, Listener, Updater, AtomValue } from './atom';
+export type { Updater, AtomValue, AtomOptions } from './atom';
 
 export { Computed, shallowEqual } from './computed';
-export type { ComputedValue, ComputedOptions, EqualFn } from './computed';
+export type { ComputedValue, ComputedOptions } from './computed';
+
+export { effect } from './effect';
+export type { EffectCleanup, EffectOptions } from './effect';
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 export { Store } from './store';
-export type {
-	StoreAtoms,
-	StoreComputeds,
-	StoreActions,
-	StoreStatus,
-} from './store';
+export type { StoreAtoms, StoreComputeds, StoreActions, Family } from './store';
 
-// ─── Batch ────────────────────────────────────────────────────────────────────
-export { batch } from './batch';
-
-// ─── React Hooks ─────────────────────────────────────────────────────────────
+// ─── React Hooks ──────────────────────────────────────────────────────────────
 export {
 	useAtom,
-	useAtomSelector,
+	useAtomState,
 	useAtomSet,
+	useAtomSelector,
 	useAtoms,
 	useStoreAction,
 } from './hooks';

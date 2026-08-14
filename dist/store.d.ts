@@ -1,90 +1,46 @@
-import { Atom } from './atom';
+import { Atom, type AtomOptions } from './atom';
 import { Computed, type ComputedOptions } from './computed';
+import { type EffectCleanup, type EffectOptions } from './effect';
+import { type Unsubscribe } from './graph';
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
-export type StoreStatus = 'idle' | 'loading' | 'ready' | 'error';
-/**
- * Base class for all stores.
- *
- * ## Anatomy of a Store
- *
- * ```ts
- * class TodoStore extends Store {
- *   // ── State (reactive) ──────────────────────────────
- *   readonly todos    = this.atom<Todo[]>([]);
- *   readonly filter   = this.atom<Filter>("all");
- *   readonly loading  = this.atom(false);
- *
- *   // ── Computed (derived, read-only) ─────────────────
- *   readonly filtered = this.computed(
- *     [this.todos, this.filter],
- *     () => applyFilter(this.todos.value, this.filter.value)
- *   );
- *
- *   // ── Internal (non-reactive) ───────────────────────
- *   private _cache = new Map<string, Todo>();
- *
- *   // ── Actions (public methods) ──────────────────────
- *   async fetchTodos() { ... }
- *   addTodo(text: string) { ... }
- * }
- * ```
- *
- * ## Repository Pattern
- *
- * Override `onInit` / `onDestroy` for DB bootstrap / cleanup:
- *
- * ```ts
- * protected async onInit() {
- *   const rows = await db.select<Todo[]>("SELECT * FROM todos");
- *   this.todos.set(rows);
- * }
- * ```
- */
+/** Base class for stores: owns atoms, computeds, effects and actions. */
 export declare abstract class Store {
-    /**
-     * Creates a reactive atom. Call this in a property initializer.
-     * The atom's name is inferred via Object.defineProperty in the constructor.
-     */
-    protected atom<T>(initialValue: T): Atom<T>;
-    /**
-     * Creates a derived computed value from one or more atoms.
-     *
-     * @param deps   Atoms this value depends on
-     * @param compute Pure function that derives the new value
-     *
-     * @example
-     * readonly fullName = this.computed(
-     *   [this.firstName, this.lastName],
-     *   () => `${this.firstName.value} ${this.lastName.value}`
-     * );
-     */
-    protected computed<T>(deps: AnyAtom[], compute: () => T, options?: ComputedOptions<T>): Computed<T>;
-    /**
-     * Called when the store is initialised (e.g. via `StoreRegistry.init()`).
-     * Override to load initial data from a database or external source.
-     */
+    private _effects;
+    private _families;
+    private _namesHydrated;
+    protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T>;
+    /** Lazy, and tracked by what the function reads. */
+    protected computed<T>(compute: () => T, options?: ComputedOptions<T>): Computed<T>;
+    /** Stopped on destroy. Create in `onInit`, not in a field initializer. */
+    protected effect(fn: () => EffectCleanup, options?: EffectOptions): Unsubscribe;
+    /** A computed per key, created on demand and cached until destroy. */
+    protected family<K, T>(compute: (key: K) => T, options?: ComputedOptions<T>): Family<K, T>;
     protected onInit(): Promise<void>;
-    /**
-     * Called when the store is destroyed.
-     * Override to cancel subscriptions, close DB connections, etc.
-     */
     protected onDestroy(): Promise<void>;
-    /** @internal — called by StoreRegistry */
+    /** @internal */
     _init(): Promise<void>;
-    /** @internal — called by StoreRegistry */
+    /** @internal */
     _destroy(): Promise<void>;
-    private _disposeComputeds;
+    /** Read via descriptors so user-defined getters are not invoked. */
+    private _ownNodes;
+    /** Lazy: class field initializers run after the base constructor. */
+    private _hydrateNames;
 }
-/** Extract all Atom properties from a Store as a mapped type */
+export interface Family<K, T> {
+    (key: K): Computed<T>;
+    /** Drops and disposes one key's node. */
+    delete(key: K): boolean;
+    /** Drops and disposes every cached node. */
+    clear(): void;
+    readonly size: number;
+}
 export type StoreAtoms<S extends Store> = {
     [K in keyof S as S[K] extends AnyAtom ? K : never]: S[K];
 };
-/** Extract all Computed properties from a Store as a mapped type */
 export type StoreComputeds<S extends Store> = {
     [K in keyof S as S[K] extends AnyComputed ? K : never]: S[K];
 };
-/** Extract all action (function) properties from a Store */
 export type StoreActions<S extends Store> = {
     [K in keyof S as S[K] extends (...args: unknown[]) => unknown ? K : never]: S[K];
 };
