@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock } from 'bun:test';
 import { Store } from '../src/store';
 
 interface Project {
@@ -69,9 +69,9 @@ describe('Store.family', () => {
 	it('notifies only the key whose value actually changed', () => {
 		const store = seed();
 
-		const listeners = new Map<string, ReturnType<typeof vi.fn>>();
+		const listeners = new Map<string, ReturnType<typeof mock>>();
 		for (const ref of ['alpha', 'beta', 'gamma']) {
-			const listener = vi.fn();
+			const listener = mock();
 			listeners.set(ref, listener);
 			store.item(ref).subscribe(listener);
 		}

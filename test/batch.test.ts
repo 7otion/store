@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock } from 'bun:test';
 import { batch } from '../src/graph';
 import { Store } from '../src/store';
 
@@ -10,7 +10,7 @@ class Harness extends Store {
 describe('batch', () => {
 	it('collapses repeated writes to one atom into a single notification', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.a.subscribe(listener);
 
 		batch(() => {
@@ -25,8 +25,8 @@ describe('batch', () => {
 
 	it('notifies each affected atom once across a multi-atom batch', () => {
 		const s = new Harness();
-		const onA = vi.fn();
-		const onB = vi.fn();
+		const onA = mock();
+		const onB = mock();
 		s.a.subscribe(onA);
 		s.b.subscribe(onB);
 
@@ -57,7 +57,7 @@ describe('batch', () => {
 
 	it('only flushes when the outermost batch closes', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.a.subscribe(listener);
 
 		batch(() => {
@@ -73,7 +73,7 @@ describe('batch', () => {
 
 	it('does not notify for a no-op write', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.a.subscribe(listener);
 
 		batch(() => {
@@ -85,7 +85,7 @@ describe('batch', () => {
 
 	it('flushes and rethrows when the batched function throws', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.a.subscribe(listener);
 
 		expect(() =>
@@ -101,7 +101,7 @@ describe('batch', () => {
 
 	it('delivers writes made by a listener during the drain', () => {
 		const s = new Harness();
-		const onB = vi.fn();
+		const onB = mock();
 		s.a.subscribe(() => s.b.set(s.a.get() * 10));
 		s.b.subscribe(onB);
 

@@ -454,8 +454,8 @@ bun run typecheck
 bun run build
 ```
 
-Tests run on vitest, which needs **Node.js on your PATH** — bun alone can't host
-vitest's worker pool. Everything else (build, typecheck) runs under bun.
+Tests run on bun test v1.3.10 (30e609e0), with a happy-dom DOM preloaded from `test/setup.ts`.
+No Node.js installation is required.
 
 ---
 

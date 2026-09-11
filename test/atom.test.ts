@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock } from 'bun:test';
 import { Store } from '../src/store';
 
 class Harness extends Store {
@@ -29,7 +29,7 @@ describe('Atom', () => {
 
 	it('notifies subscribers on change', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.count.subscribe(listener);
 
 		s.count.set(1);
@@ -41,7 +41,7 @@ describe('Atom', () => {
 
 	it('does not notify when the value is Object.is-equal', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.count.subscribe(listener);
 
 		s.count.set(0);
@@ -52,7 +52,7 @@ describe('Atom', () => {
 
 	it('treats a new array with equal contents as a change', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		s.items.subscribe(listener);
 
 		s.items.set([]);
@@ -61,7 +61,7 @@ describe('Atom', () => {
 
 	it('stops notifying after unsubscribe', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		const unsub = s.count.subscribe(listener);
 
 		s.count.set(1);
@@ -73,7 +73,7 @@ describe('Atom', () => {
 
 	it('unsubscribe is idempotent', () => {
 		const s = new Harness();
-		const listener = vi.fn();
+		const listener = mock();
 		const unsub = s.count.subscribe(listener);
 
 		unsub();
@@ -85,8 +85,8 @@ describe('Atom', () => {
 
 	it('supports multiple independent subscribers', () => {
 		const s = new Harness();
-		const a = vi.fn();
-		const b = vi.fn();
+		const a = mock();
+		const b = mock();
 		s.count.subscribe(a);
 		s.count.subscribe(b);
 
@@ -98,8 +98,8 @@ describe('Atom', () => {
 
 	it('keeps atoms on the same store independent', () => {
 		const s = new Harness();
-		const onCount = vi.fn();
-		const onName = vi.fn();
+		const onCount = mock();
+		const onName = mock();
 		s.count.subscribe(onCount);
 		s.name.subscribe(onName);
 

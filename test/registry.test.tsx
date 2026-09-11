@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { act, render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { Store } from '../src/store';
 import { StoreProvider, StoreRegistry } from '../src/registry';
 import { flushMicrotasks } from './setup';

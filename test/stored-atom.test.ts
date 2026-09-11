@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { Atom } from '../src/atom';
 import { Store } from '../src/store';
 import { configureStorage, type StorageAdapter } from '../src/stored-atom';
@@ -6,11 +6,9 @@ import { configureStorage, type StorageAdapter } from '../src/stored-atom';
 function fakeStorage(seed: Record<string, string> = {}) {
 	const map = new Map(Object.entries(seed));
 	return {
-		getItem: vi.fn((key: string) => map.get(key) ?? null),
-		setItem: vi.fn(
-			(key: string, value: string) => void map.set(key, value),
-		),
-		removeItem: vi.fn((key: string) => void map.delete(key)),
+		getItem: mock((key: string) => map.get(key) ?? null),
+		setItem: mock((key: string, value: string) => void map.set(key, value)),
+		removeItem: mock((key: string) => void map.delete(key)),
 		map,
 	};
 }
@@ -114,7 +112,7 @@ describe('storedAtom', () => {
 	});
 
 	it('keeps working, unpersisted, without an adapter', () => {
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const warn = spyOn(console, 'warn').mockImplementation(() => {});
 		configureStorage(null);
 
 		class Plain extends Store {
@@ -125,7 +123,7 @@ describe('storedAtom', () => {
 		s.count.set(2);
 
 		expect(s.count.get()).toBe(2);
-		expect(warn).toHaveBeenCalledOnce();
+		expect(warn).toHaveBeenCalledTimes(1);
 		warn.mockRestore();
 	});
 
@@ -168,11 +166,11 @@ describe('storedAtom', () => {
 	it('notifies subscribers like a plain atom', () => {
 		const storage = fakeStorage();
 		const s = new Harness(storage);
-		const seen = vi.fn();
+		const seen = mock();
 
 		s.view.subscribe(seen);
 		s.view.set('list');
 
-		expect(seen).toHaveBeenCalledOnce();
+		expect(seen).toHaveBeenCalledTimes(1);
 	});
 });

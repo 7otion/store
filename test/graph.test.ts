@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock } from 'bun:test';
 import { Store } from '../src/store';
 import { batch, untrack } from '../src/graph';
 import { effect } from '../src/effect';
@@ -229,7 +229,7 @@ describe('glitch-freedom', () => {
 			});
 		}
 		const s = new S();
-		const listener = vi.fn();
+		const listener = mock();
 		s.label.subscribe(listener);
 		expect(s.downstreamRuns).toBe(1);
 
@@ -252,7 +252,7 @@ describe('glitch-freedom', () => {
 			});
 		}
 		const s = new S();
-		const listener = vi.fn();
+		const listener = mock();
 		s.view.subscribe(listener);
 		const before = s.view.get();
 
@@ -278,7 +278,7 @@ describe('batch', () => {
 			});
 		}
 		const s = new S();
-		const listener = vi.fn();
+		const listener = mock();
 		s.full.subscribe(listener);
 		expect(s.runs).toBe(1);
 
@@ -353,7 +353,7 @@ describe('effect', () => {
 			readonly b = this.atom(1);
 		}
 		const s = new S();
-		const run = vi.fn();
+		const run = mock();
 
 		effect(() => {
 			run(s.a.value + s.b.value);
@@ -428,7 +428,7 @@ describe('dispose', () => {
 			readonly out = this.computed(() => this.a.value * 2);
 		}
 		const s = new S();
-		const listener = vi.fn();
+		const listener = mock();
 		s.out.subscribe(listener);
 
 		s.out.dispose();

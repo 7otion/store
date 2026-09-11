@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { Store } from '../src/store';
 import {
 	useAtom,
@@ -135,7 +135,7 @@ describe('useAtom', () => {
 
 	it('subscribes once and does not resubscribe across re-renders', async () => {
 		const s = new UserStore();
-		const subscribeSpy = vi.spyOn(s.filter, 'subscribe');
+		const subscribeSpy = spyOn(s.filter, 'subscribe');
 		let bump = () => {};
 
 		function View() {
@@ -194,7 +194,7 @@ describe('useAtomSelector', () => {
 
 	it('does not resubscribe when passed an inline selector', async () => {
 		const s = new UserStore();
-		const subscribeSpy = vi.spyOn(s.users, 'subscribe');
+		const subscribeSpy = spyOn(s.users, 'subscribe');
 		let bump = () => {};
 
 		function View() {

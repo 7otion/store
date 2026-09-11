@@ -1,6 +1,6 @@
 import { StrictMode, startTransition } from 'react';
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { Store } from '../src/store';
 import { useAtom, useAtomState } from '../src/hooks';
 
