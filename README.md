@@ -329,6 +329,19 @@ Keep transient state in a plain `atom` rather than picking fields apart: a
 search box belongs in `atom('')` next to the `storedAtom` holding the filters
 that should come back.
 
+**State a component owns** — a collapsed panel, a toggle — needs no store:
+
+```tsx
+const [isCollapsed, setCollapsed] = useStoredState(
+	`panel.${id}.collapsed`,
+	false,
+);
+```
+
+`useStoredState` takes the same options, and one atom is shared per key, so two
+components reading the same key stay in sync. The entry is dropped when the last
+of them unmounts, and the next mount reloads from storage.
+
 ---
 
 ## Batching
@@ -391,6 +404,7 @@ For isolated contexts (a second window, a test), pass your own registry:
 | `useAtomSet(atom)`                | **Never**                  | Write-only components         |
 | `useAtomSelector(node, sel, eq?)` | The selected slice changes | Narrowing a large value       |
 | `useAtoms(...nodes)`              | Any of them changes        | Reading several at once       |
+| `useStoredState(key, init, opt?)` | The stored value changes   | Persisted component state     |
 | `useStoreAction(fn)`              | `loading` / `error` moves  | Async actions with status     |
 
 Selectors and equality functions may be passed inline — they never cause a

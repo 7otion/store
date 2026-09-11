@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Atom, Updater } from './atom';
 import type { EqualFn, ReactiveNode } from './graph';
+import { StoredAtom, type StoredAtomOptions } from './stored-atom';
 
 type Readable<T> = ReactiveNode<T>;
 
@@ -45,6 +46,65 @@ export function useAtomState<T>(
 /** A stable setter that does not subscribe. */
 export function useAtomSet<T>(atom: Atom<T>): (updater: Updater<T>) => void {
 	return useCallback((updater: Updater<T>) => atom.set(updater), [atom]);
+}
+
+// ─── useStoredState ───────────────────────────────────────────────────────────
+
+/** One atom per key, so components sharing a key stay in sync. */
+const storedAtoms = new Map<string, StoredAtom<unknown>>();
+
+function storedAtomFor<T>(
+	key: string,
+	initialValue: T,
+	options?: StoredAtomOptions<T>,
+): StoredAtom<T> {
+	let atom = storedAtoms.get(key) as StoredAtom<T> | undefined;
+	if (!atom) {
+		// The first caller decides the initial value and options for this key.
+		atom = new StoredAtom<T>(key, initialValue, options);
+		storedAtoms.set(key, atom as StoredAtom<unknown>);
+	}
+	return atom;
+}
+
+/**
+ * `useState` backed by storage, shared by key. The entry is dropped when its
+ * last subscriber unmounts, so a later mount reloads from storage.
+ */
+export function useStoredState<T>(
+	key: string,
+	initialValue: T,
+	options?: StoredAtomOptions<T>,
+): [T, (updater: Updater<T>) => void] {
+	const atom = useMemo(
+		// Only `key` identifies the atom; a changed initial value or options
+		// would otherwise recreate one the other subscribers are not using.
+		() => storedAtomFor(key, initialValue, options),
+		[key],
+	);
+
+	const subscribe = useCallback(
+		(onChange: () => void) => {
+			const unsubscribe = atom.subscribe(onChange);
+			return () => {
+				unsubscribe();
+				if (
+					atom.listenerCount === 0 &&
+					storedAtoms.get(key) === (atom as StoredAtom<unknown>)
+				) {
+					storedAtoms.delete(key);
+				}
+			};
+		},
+		[atom, key],
+	);
+
+	const getSnapshot = useCallback(() => atom.peek(), [atom]);
+
+	const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	useDebugValue(value);
+
+	return [value, useAtomSet(atom)];
 }
 
 // ─── useAtomSelector ──────────────────────────────────────────────────────────

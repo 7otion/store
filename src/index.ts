@@ -26,6 +26,7 @@ export {
 	useAtomSet,
 	useAtomSelector,
 	useAtoms,
+	useStoredState,
 	useStoreAction,
 } from './hooks';
 
