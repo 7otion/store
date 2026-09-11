@@ -1,6 +1,6 @@
 {
 	"name": "@7otion/store",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"author": "Burak Kartal",
 	"description": "A simple, highly opinionated store management library for React.",
 	"repository": {
