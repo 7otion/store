@@ -325,6 +325,27 @@ backend the atom still works, warns once, and persists nothing. Adapters are
 synchronous, so an async store (React Native's `AsyncStorage`) needs a
 hydration step of its own and is not supported.
 
+**One namespace per project.** `namespaced` puts every key under a prefix you
+control, so the same key in two projects keeps its own value. A `null` prefix
+stores nothing, rather than leaking into a shared bucket.
+
+```ts
+import {
+	configureStorage,
+	localStorageAdapter,
+	namespaced,
+} from '@7otion/store';
+
+let project: string | null = null;
+configureStorage(
+	namespaced(localStorageAdapter, () => project && `proj.${project}.`),
+);
+```
+
+`clearNamespace(adapter, prefix)` wipes one namespace — a deleted project, say —
+open or not. It needs a backend that can enumerate (`keys()`, which
+`localStorageAdapter` has) and returns false otherwise.
+
 **Changing backend mid-run.** A stored atom loads once, so swapping the
 adapter — a namespace per project, say — leaves loaded atoms holding the old
 values. `reload()` re-reads one key; `store.reloadStored()` re-reads every

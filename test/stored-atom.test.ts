@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { Atom } from '../src/atom';
 import { Store } from '../src/store';
-import { configureStorage, type StorageAdapter } from '../src/stored-atom';
+import { configureStorage, type StorageAdapter } from '../src/storage';
 
 function fakeStorage(seed: Record<string, string> = {}) {
 	const map = new Map(Object.entries(seed));

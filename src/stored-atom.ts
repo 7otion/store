@@ -1,46 +1,14 @@
 import { Atom, type AtomOptions } from './atom';
-
-/** The synchronous subset of the Web Storage API a stored atom needs. */
-export interface StorageAdapter {
-	getItem(key: string): string | null;
-	setItem(key: string, value: string): void;
-	removeItem(key: string): void;
-}
+import {
+	currentStorage,
+	warnMissingStorage,
+	type StorageAdapter,
+} from './storage';
 
 export interface StoredAtomOptions<T> extends AtomOptions<T> {
 	/** Rejects a stored value; a rejected one falls back to the initial value. */
 	validate?: (value: unknown) => boolean;
 	storage?: StorageAdapter;
-}
-
-function detectStorage(): StorageAdapter | null {
-	try {
-		// Reading the property throws where site data is blocked.
-		return globalThis.localStorage ?? null;
-	} catch {
-		return null;
-	}
-}
-
-let defaultStorage: StorageAdapter | null = detectStorage();
-let warned = false;
-
-/**
- * Sets the backend for every stored atom. Call it before the first store is
- * constructed; `localStorage` is used automatically where it exists.
- */
-export function configureStorage(storage: StorageAdapter | null): void {
-	defaultStorage = storage;
-	warned = false;
-}
-
-function warnMissingStorage(name: string): void {
-	if (warned) return;
-	warned = true;
-	console.warn(
-		`[@7otion/store] No storage adapter, so "${name}" is not persisted. ` +
-			'Call configureStorage() before the first store is constructed.',
-	);
 }
 
 /** An atom that loads from storage on construction and saves on every change. */
@@ -84,7 +52,7 @@ export class StoredAtom<T> extends Atom<T> {
 	}
 
 	private get _backend(): StorageAdapter | null {
-		return this._storage ?? defaultStorage;
+		return this._storage ?? currentStorage();
 	}
 
 	private _save(): void {
@@ -108,7 +76,7 @@ export class StoredAtom<T> extends Atom<T> {
 		initialValue: T,
 		options?: StoredAtomOptions<T>,
 	): T {
-		const storage = options?.storage ?? defaultStorage;
+		const storage = options?.storage ?? currentStorage();
 		if (!storage) {
 			warnMissingStorage(options?.name ?? key);
 			return initialValue;

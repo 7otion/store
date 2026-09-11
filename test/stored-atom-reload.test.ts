@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Store } from '../src/store';
-import type { StorageAdapter } from '../src/stored-atom';
+import type { StorageAdapter } from '../src/storage';
 
 function fakeStorage(seed: Record<string, string> = {}) {
 	const map = new Map(Object.entries(seed));
