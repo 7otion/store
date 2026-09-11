@@ -6,6 +6,9 @@ export type { Unsubscribe, Listener, EqualFn } from './graph';
 export { Atom } from './atom';
 export type { Updater, AtomValue, AtomOptions } from './atom';
 
+export { StoredAtom, configureStorage } from './stored-atom';
+export type { StorageAdapter, StoredAtomOptions } from './stored-atom';
+
 export { Computed, shallowEqual } from './computed';
 export type { ComputedValue, ComputedOptions } from './computed';
 

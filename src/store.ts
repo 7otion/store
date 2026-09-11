@@ -6,6 +6,7 @@ import {
 	effect as createEffect,
 } from './effect';
 import { Derived, ReactiveNode, type Unsubscribe } from './graph';
+import { StoredAtom, type StoredAtomOptions } from './stored-atom';
 
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
@@ -21,6 +22,15 @@ export abstract class Store {
 
 	protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T> {
 		return new Atom<T>(initialValue, options);
+	}
+
+	/** Loaded from storage on construction, saved on every change. */
+	protected storedAtom<T>(
+		key: string,
+		initialValue: T,
+		options?: StoredAtomOptions<T>,
+	): Atom<T> {
+		return new StoredAtom<T>(key, initialValue, options);
 	}
 
 	/** Lazy, and tracked by what the function reads. */

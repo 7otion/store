@@ -130,20 +130,35 @@ function StatusBar() {
 		userStore.error,
 		userStore.count,
 	);
-	return <div>{loading ? 'Syncing…' : `${count} users`} {error}</div>;
+	return (
+		<div>
+			{loading ? 'Syncing…' : `${count} users`} {error}
+		</div>
+	);
 }
 
 // Async action with loading/error state
 function CreateUserForm() {
 	const [name, setName] = useState('');
-	const { run: create, loading, error } = useStoreAction((n: string) =>
+	const {
+		run: create,
+		loading,
+		error,
+	} = useStoreAction((n: string) =>
 		userStore.createUser(n, 'test@example.com'),
 	);
 
 	return (
-		<form onSubmit={e => { e.preventDefault(); create(name); }}>
+		<form
+			onSubmit={e => {
+				e.preventDefault();
+				create(name);
+			}}
+		>
 			<input value={name} onChange={e => setName(e.target.value)} />
-			<button type="submit" disabled={loading}>Add User</button>
+			<button type="submit" disabled={loading}>
+				Add User
+			</button>
 			{error && <p>{error.message}</p>}
 		</form>
 	);
@@ -267,6 +282,55 @@ stop();
 
 ---
 
+## Persistence
+
+`storedAtom` is an atom that loads itself from storage and saves on every
+change. No setter has to remember to write.
+
+```ts
+class FilterStore extends Store {
+	readonly view = this.storedAtom<View>('app.view', 'grid');
+	readonly focusRef = this.storedAtom<string | null>('app.focus', null);
+
+	setView(view: View) {
+		this.view.set(view); // persisted
+	}
+}
+```
+
+Values are stored as JSON and it is an `Atom<T>`, so reading, writing,
+`equals` and hooks all behave the same.
+
+**Stale values.** Storage outlives the code that wrote it: an option you later
+removed, or a shape you changed, still parses. `validate` rejects one, falling
+back to the initial value.
+
+```ts
+readonly view = this.storedAtom<View>('app.view', 'grid', {
+	validate: value => VIEWS.includes(value as View),
+});
+```
+
+**Where it stores.** `localStorage` is used automatically where it exists.
+Anywhere else, give it a backend before the first store is constructed:
+
+```ts
+import { configureStorage } from '@7otion/store';
+
+configureStorage({ getItem, setItem, removeItem });
+```
+
+`options.storage` overrides the backend for a single atom. Without any
+backend the atom still works, warns once, and persists nothing. Adapters are
+synchronous, so an async store (React Native's `AsyncStorage`) needs a
+hydration step of its own and is not supported.
+
+Keep transient state in a plain `atom` rather than picking fields apart: a
+search box belongs in `atom('')` next to the `storedAtom` holding the filters
+that should come back.
+
+---
+
 ## Batching
 
 Each write settles the graph immediately. Wrap a transaction to settle once:
@@ -320,14 +384,14 @@ For isolated contexts (a second window, a test), pass your own registry:
 
 ## Hooks Reference
 
-| Hook                                   | Re-renders when          | Use for                             |
-| -------------------------------------- | ------------------------ | ----------------------------------- |
-| `useAtom(node)`                        | That node changes        | Reading an atom or computed         |
-| `useAtomState(atom)`                   | The atom changes         | Read + write, like `useState`       |
-| `useAtomSet(atom)`                     | **Never**                | Write-only components               |
-| `useAtomSelector(node, sel, eq?)`      | The selected slice changes | Narrowing a large value           |
-| `useAtoms(...nodes)`                   | Any of them changes      | Reading several at once             |
-| `useStoreAction(fn)`                   | `loading` / `error` moves | Async actions with status          |
+| Hook                              | Re-renders when            | Use for                       |
+| --------------------------------- | -------------------------- | ----------------------------- |
+| `useAtom(node)`                   | That node changes          | Reading an atom or computed   |
+| `useAtomState(atom)`              | The atom changes           | Read + write, like `useState` |
+| `useAtomSet(atom)`                | **Never**                  | Write-only components         |
+| `useAtomSelector(node, sel, eq?)` | The selected slice changes | Narrowing a large value       |
+| `useAtoms(...nodes)`              | Any of them changes        | Reading several at once       |
+| `useStoreAction(fn)`              | `loading` / `error` moves  | Async actions with status     |
 
 Selectors and equality functions may be passed inline — they never cause a
 re-subscription.
@@ -340,7 +404,10 @@ re-subscription.
 **Writing** — `.set(next)`, `.set(prev => next)`, `.value = next`.
 
 > A function passed to `.set()` is always treated as an updater. To store a
-> function *as* the value, assign `.value` directly.
+> function _as_ the value, assign `.value` directly.
+
+**Persistence** — `this.storedAtom(key, initial, { validate, storage })` loads
+from storage and saves on change; `configureStorage(adapter)` sets the backend.
 
 **Options** — both `this.atom()` and `this.computed()` take `{ equals, name }`.
 `shallowEqual` is exported for computeds that build a fresh object each run:
