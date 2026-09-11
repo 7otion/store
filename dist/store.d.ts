@@ -2,7 +2,7 @@ import { Atom, type AtomOptions } from './atom';
 import { Computed, type ComputedOptions } from './computed';
 import { type EffectCleanup, type EffectOptions } from './effect';
 import { type Unsubscribe } from './graph';
-import { type StoredAtomOptions } from './stored-atom';
+import { StoredAtom, type StoredAtomOptions } from './stored-atom';
 type AnyAtom = Atom<any>;
 type AnyComputed = Computed<any>;
 /** Base class for stores: owns atoms, computeds, effects and actions. */
@@ -12,7 +12,7 @@ export declare abstract class Store {
     private _namesHydrated;
     protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T>;
     /** Loaded from storage on construction, saved on every change. */
-    protected storedAtom<T>(key: string, initialValue: T, options?: StoredAtomOptions<T>): Atom<T>;
+    protected storedAtom<T>(key: string, initialValue: T, options?: StoredAtomOptions<T>): StoredAtom<T>;
     /** Lazy, and tracked by what the function reads. */
     protected computed<T>(compute: () => T, options?: ComputedOptions<T>): Computed<T>;
     /** Stopped on destroy. Create in `onInit`, not in a field initializer. */
@@ -25,6 +25,8 @@ export declare abstract class Store {
     _init(): Promise<void>;
     /** @internal */
     _destroy(): Promise<void>;
+    /** Re-reads every stored atom this store owns. */
+    reloadStored(): void;
     /** Read via descriptors so user-defined getters are not invoked. */
     private _ownNodes;
     /** Lazy: class field initializers run after the base constructor. */

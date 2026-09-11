@@ -325,6 +325,19 @@ backend the atom still works, warns once, and persists nothing. Adapters are
 synchronous, so an async store (React Native's `AsyncStorage`) needs a
 hydration step of its own and is not supported.
 
+**Changing backend mid-run.** A stored atom loads once, so swapping the
+adapter — a namespace per project, say — leaves loaded atoms holding the old
+values. `reload()` re-reads one key; `store.reloadStored()` re-reads every
+stored atom a store owns. Both notify subscribers and never write back.
+
+```ts
+configureStorage(namespacedStorage(projectSlug));
+filterStore.reloadStored();
+```
+
+An atom pinned to its own `options.storage` ignores the swap, which is how a
+global preference opts out of a namespaced default.
+
 Keep transient state in a plain `atom` rather than picking fields apart: a
 search box belongs in `atom('')` next to the `storedAtom` holding the filters
 that should come back.

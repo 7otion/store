@@ -47,11 +47,29 @@ function warnMissingStorage(name: string): void {
 export class StoredAtom<T> extends Atom<T> {
 	private _key: string;
 	private _storage?: StorageAdapter;
+	private _initialValue: T;
+	private _options?: StoredAtomOptions<T>;
 
 	constructor(key: string, initialValue: T, options?: StoredAtomOptions<T>) {
 		super(StoredAtom._load(key, initialValue, options), options);
 		this._key = key;
 		this._storage = options?.storage;
+		this._initialValue = initialValue;
+		this._options = options;
+	}
+
+	/**
+	 * Re-reads the key, for when the backend changed underneath — swapping a
+	 * namespaced adapter, say. Notifies subscribers without saving: a reload is
+	 * a read, and writing back would persist the initial value for a key that
+	 * has none.
+	 */
+	reload(): void {
+		super.value = StoredAtom._load(
+			this._key,
+			this._initialValue,
+			this._options,
+		);
 	}
 
 	override get value(): T {

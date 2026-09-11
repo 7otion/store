@@ -29,7 +29,7 @@ export abstract class Store {
 		key: string,
 		initialValue: T,
 		options?: StoredAtomOptions<T>,
-	): Atom<T> {
+	): StoredAtom<T> {
 		return new StoredAtom<T>(key, initialValue, options);
 	}
 
@@ -109,6 +109,15 @@ export abstract class Store {
 		}
 		for (const [, node] of this._ownNodes()) {
 			if (node instanceof Derived) node.dispose();
+		}
+	}
+
+	// ─── Persistence ─────────────────────────────────────────────────────────
+
+	/** Re-reads every stored atom this store owns. */
+	reloadStored(): void {
+		for (const [, node] of this._ownNodes()) {
+			if (node instanceof StoredAtom) node.reload();
 		}
 	}
 
