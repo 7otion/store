@@ -10,6 +10,6 @@ export { effect } from './effect';
 export type { EffectCleanup, EffectOptions } from './effect';
 export { Store } from './store';
 export type { StoreAtoms, StoreComputeds, StoreActions, Family } from './store';
-export { useAtom, useAtomState, useAtomSet, useAtomSelector, useAtoms, useStoreAction, } from './hooks';
+export { useAtom, useAtomState, useAtomSet, useAtomSelector, useAtoms, useStoredState, useStoreAction, } from './hooks';
 export { StoreRegistry, StoreProvider, useRegistry, useRegisteredStore, registry, } from './registry';
 //# sourceMappingURL=index.d.ts.map
