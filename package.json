@@ -24,7 +24,7 @@
 	"scripts": {
 		"build": "bun build.mjs",
 		"watch": "tsc --watch --preserveWatchOutput",
-		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+		"typecheck": "tsc --noEmit && tsc -p test/tsconfig.json",
 		"test": "bun test",
 		"test:watch": "bun test --watch",
 		"format": "bunx prettier --write '**/*.{js,jsx,ts,tsx,json,css}' --ignore-path .prettierignore"
