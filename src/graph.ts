@@ -43,6 +43,8 @@ export abstract class ReactiveNode<T> {
 	_listeners = new Set<Listener>();
 	/** The version subscribers were last told about. */
 	_notifiedVersion = 0;
+	/** A touch reached this node; its next run bumps the version even if the value is equal. */
+	_touched = false;
 	_name: string;
 
 	protected _value!: T;
@@ -123,8 +125,19 @@ export abstract class ReactiveNode<T> {
 		for (const listener of [...this._listeners]) listener();
 	}
 
-	_markStale(state: NodeState): void {
-		if (this._state >= state) return;
+	_markStale(state: NodeState, touched = false): void {
+		const newlyTouched = touched && !this._touched;
+		if (newlyTouched) this._touched = true;
+
+		if (this._state >= state) {
+			// Already stale, but the touch has not been passed down yet.
+			if (newlyTouched) {
+				for (const observer of this._observers) {
+					observer._markStale(CHECK, true);
+				}
+			}
+			return;
+		}
 
 		const wasClean = this._state === CLEAN;
 		this._state = state;
@@ -132,8 +145,10 @@ export abstract class ReactiveNode<T> {
 
 		// A CHECK → DIRTY upgrade needs no descent: everything below is already
 		// at least CHECK, which is enough to make it verify on the next pull.
-		if (wasClean) {
-			for (const observer of this._observers) observer._markStale(CHECK);
+		if (wasClean || newlyTouched) {
+			for (const observer of this._observers) {
+				observer._markStale(CHECK, touched);
+			}
 		}
 	}
 }
@@ -228,6 +243,7 @@ export abstract class Derived<T> extends ReactiveNode<T> {
 		} finally {
 			currentConsumer = prevConsumer;
 			this._running = false;
+			this._touched = false;
 			this._commitDeps();
 		}
 	}

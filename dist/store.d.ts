@@ -1,4 +1,5 @@
 import { Atom, type AtomOptions } from './atom';
+import type { HeldClass } from './change-source';
 import { Computed, type ComputedOptions } from './computed';
 import { type EffectCleanup, type EffectOptions } from './effect';
 import { type Unsubscribe } from './graph';
@@ -11,6 +12,9 @@ export declare abstract class Store {
     private _families;
     private _namesHydrated;
     protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T>;
+    /** An atom about instances of `cls`, republished when a change source reports one. Empty list unless a value is given. */
+    protected atomOf<C extends HeldClass>(cls: C | C[]): Atom<InstanceType<C>[]>;
+    protected atomOf<C extends HeldClass, T>(cls: C | C[], initialValue: T, options?: AtomOptions<T>): Atom<T>;
     /** Loaded from storage on construction, saved on every change. */
     protected storedAtom<T>(key: string, initialValue: T, options?: StoredAtomOptions<T>): StoredAtom<T>;
     /** Lazy, and tracked by what the function reads. */

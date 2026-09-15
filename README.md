@@ -397,6 +397,52 @@ of the graph either way.
 
 ---
 
+## In-place changes
+
+An atom notices a write only when the value's identity changes. A value changed
+in place, such as a field set on an object the atom already holds, is invisible
+to it. `touch()` says "this value changed, notify" without replacing it:
+
+```ts
+const user = store.users.get()[0];
+user.name = 'Grace';
+store.users.touch(); // subscribers, computeds and hooks all see it
+```
+
+A touch passes through computeds even when their result is the same object, and
+every hook re-renders on it. `useAtomSelector` re-renders when its selection is
+that same object; a selected primitive that did not change still skips.
+
+### Change sources
+
+Something outside the store, an ORM say, often knows which instances it changed.
+Rather than touching atoms by hand after every such change, an atom says which
+class it is about, and one source reports changes for all of them:
+
+```ts
+import { configureChangeSource } from '@7otion/store';
+
+configureChangeSource(orm.onInstanceChange); // once, at startup
+
+class UserStore extends Store {
+	readonly users = this.atomOf(User); // Atom<User[]>, starts empty
+	readonly current = this.atomOf(User, null as User | null);
+	readonly byId = this.atomOf(User, {} as Record<number, User>);
+}
+```
+
+`atomOf(cls)` is an empty list of that class; `atomOf(cls, initial, options?)`
+is `atom(initial, options)` about that class, whatever shape the value has. A
+source is anything of the shape `(report) => unsubscribe`, where `report` takes
+the changed instances. When it reports, every atom whose class matches one of
+them is touched, in one batch. A class matches by `instanceof`, or by its own
+`static affectedBy(instance)` when it has one, which is how an ORM model can
+answer for everything reachable through its relations. An object holding two
+unrelated classes names both: `atomOf([User, Team], …)`. A store's atoms stop
+listening when the store is destroyed. Passing `null` disconnects the source.
+
+---
+
 ## Registry & Lifecycle
 
 ```tsx
@@ -466,6 +512,10 @@ readonly view = this.computed(
 	{ equals: shallowEqual },
 );
 ```
+
+**In-place changes** — `.touch()` notifies without replacing the value;
+`this.atomOf(cls, …)` plus `configureChangeSource(source)` does it for every
+atom about a reported instance.
 
 **Escape hatch** — `untrack(fn)` reads without registering a dependency.
 

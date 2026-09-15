@@ -17,6 +17,28 @@ type Values<T extends readonly Readable<unknown>[]> = {
 	[K in keyof T]: T[K] extends Readable<infer V> ? V : never;
 };
 
+// ─── Snapshots ────────────────────────────────────────────────────────────────
+
+/** React compares snapshots by identity, so a touch needs a fresh box. */
+interface Box<T> {
+	readonly value: T;
+}
+
+/** A box per node version, so React re-renders when the same object is touched. */
+function versionedSnapshot<T>(node: Readable<T>): () => Box<T> {
+	let version = -1;
+	let box: Box<T> | null = null;
+
+	return () => {
+		const value = node.peek();
+		if (box === null || node._version !== version) {
+			version = node._version;
+			box = { value };
+		}
+		return box;
+	};
+}
+
 // ─── useAtom ──────────────────────────────────────────────────────────────────
 
 /** Subscribes to an Atom or Computed. */
@@ -25,9 +47,13 @@ export function useAtom<T>(node: Readable<T>): T {
 		(onChange: () => void) => node.subscribe(onChange),
 		[node],
 	);
-	const getSnapshot = useCallback(() => node.peek(), [node]);
+	const getSnapshot = useMemo(() => versionedSnapshot(node), [node]);
 
-	const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	const value = useSyncExternalStore(
+		subscribe,
+		getSnapshot,
+		getSnapshot,
+	).value;
 	useDebugValue(value);
 	return value;
 }
@@ -99,9 +125,13 @@ export function useStoredState<T>(
 		[atom, key],
 	);
 
-	const getSnapshot = useCallback(() => atom.peek(), [atom]);
+	const getSnapshot = useMemo(() => versionedSnapshot(atom), [atom]);
 
-	const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	const value = useSyncExternalStore(
+		subscribe,
+		getSnapshot,
+		getSnapshot,
+	).value;
 	useDebugValue(value);
 
 	return [value, useAtomSet(atom)];
@@ -123,25 +153,45 @@ export function useAtomSelector<T, R>(
 	);
 
 	const getSelection = useMemo(() => {
-		let hasMemo = false;
+		let box: Box<R> | null = null;
 		let memoSource: T;
-		let memoResult: R;
+		let memoVersion = -1;
 
-		return (): R => {
+		return (): Box<R> => {
 			const source = node.peek();
-			if (hasMemo && Object.is(memoSource, source)) return memoResult;
+			const version = node._version;
+			if (box !== null && version === memoVersion) return box;
 
 			const next = selector(source);
-			memoSource = source;
-			if (hasMemo && isEqual(memoResult, next)) return memoResult;
 
-			hasMemo = true;
-			memoResult = next;
-			return next;
+			if (box !== null) {
+				// The version moved but the source is the same object: a touch.
+				// Selecting that same object back is selecting the changed thing.
+				const touched = Object.is(memoSource, source);
+				const sameObject =
+					typeof next === 'object' &&
+					next !== null &&
+					Object.is(box.value, next);
+
+				if (!(touched && sameObject) && isEqual(box.value, next)) {
+					memoSource = source;
+					memoVersion = version;
+					return box;
+				}
+			}
+
+			box = { value: next };
+			memoSource = source;
+			memoVersion = version;
+			return box;
 		};
 	}, [node, selector, isEqual]);
 
-	const value = useSyncExternalStore(subscribe, getSelection, getSelection);
+	const value = useSyncExternalStore(
+		subscribe,
+		getSelection,
+		getSelection,
+	).value;
 	useDebugValue(value);
 	return value;
 }
@@ -166,17 +216,20 @@ export function useAtoms<T extends readonly Readable<unknown>[]>(
 
 	const getSnapshot = useMemo(() => {
 		let last: unknown[] | null = null;
+		let versions: number[] = [];
 		return (): unknown[] => {
 			const next = stable.map(node => node.peek());
-			// uSES compares snapshots by identity.
+			const nextVersions = stable.map(node => node._version);
+			// uSES compares snapshots by identity; versions decide when to mint one.
 			if (
 				last !== null &&
-				last.length === next.length &&
-				last.every((value, i) => Object.is(value, next[i]))
+				versions.length === nextVersions.length &&
+				versions.every((version, i) => version === nextVersions[i])
 			) {
 				return last;
 			}
 			last = next;
+			versions = nextVersions;
 			return next;
 		};
 	}, [stable]);

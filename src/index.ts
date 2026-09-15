@@ -17,6 +17,9 @@ export {
 } from './storage';
 export type { StorageAdapter } from './storage';
 
+export { configureChangeSource } from './change-source';
+export type { ChangeSource, ChangeReport, HeldClass } from './change-source';
+
 export { Computed, shallowEqual } from './computed';
 export type { ComputedValue, ComputedOptions } from './computed';
 

@@ -25,6 +25,8 @@ export declare abstract class ReactiveNode<T> {
     _listeners: Set<Listener>;
     /** The version subscribers were last told about. */
     _notifiedVersion: number;
+    /** A touch reached this node; its next run bumps the version even if the value is equal. */
+    _touched: boolean;
     _name: string;
     protected _value: T;
     constructor(name: string);
@@ -43,7 +45,7 @@ export declare abstract class ReactiveNode<T> {
     /** Whether this node must be kept eagerly up to date. */
     get _watched(): boolean;
     _notify(): void;
-    _markStale(state: NodeState): void;
+    _markStale(state: NodeState, touched?: boolean): void;
 }
 export declare function track(node: ReactiveNode<unknown>): void;
 /** Runs `fn` without registering any dependencies. */

@@ -1,4 +1,5 @@
 import { Atom, type AtomOptions } from './atom';
+import type { HeldClass } from './change-source';
 import { Computed, type ComputedOptions } from './computed';
 import {
 	type EffectCleanup,
@@ -22,6 +23,26 @@ export abstract class Store {
 
 	protected atom<T>(initialValue: T, options?: AtomOptions<T>): Atom<T> {
 		return new Atom<T>(initialValue, options);
+	}
+
+	/** An atom about instances of `cls`, republished when a change source reports one. Empty list unless a value is given. */
+	protected atomOf<C extends HeldClass>(
+		cls: C | C[],
+	): Atom<InstanceType<C>[]>;
+	protected atomOf<C extends HeldClass, T>(
+		cls: C | C[],
+		initialValue: T,
+		options?: AtomOptions<T>,
+	): Atom<T>;
+	protected atomOf<C extends HeldClass, T>(
+		cls: C | C[],
+		...rest: [] | [T, AtomOptions<T>?]
+	): Atom<T> | Atom<InstanceType<C>[]> {
+		if (rest.length === 0) {
+			return new Atom<InstanceType<C>[]>([])._about(cls);
+		}
+		const [initialValue, options] = rest;
+		return new Atom<T>(initialValue, options)._about(cls);
 	}
 
 	/** Loaded from storage on construction, saved on every change. */
@@ -109,6 +130,7 @@ export abstract class Store {
 		}
 		for (const [, node] of this._ownNodes()) {
 			if (node instanceof Derived) node.dispose();
+			if (node instanceof Atom) node._unregister();
 		}
 	}
 

@@ -6,6 +6,8 @@ export { StoredAtom } from './stored-atom';
 export type { StoredAtomOptions } from './stored-atom';
 export { configureStorage, localStorageAdapter, namespaced, clearNamespace, } from './storage';
 export type { StorageAdapter } from './storage';
+export { configureChangeSource } from './change-source';
+export type { ChangeSource, ChangeReport, HeldClass } from './change-source';
 export { Computed, shallowEqual } from './computed';
 export type { ComputedValue, ComputedOptions } from './computed';
 export { effect } from './effect';

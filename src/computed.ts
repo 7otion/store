@@ -54,8 +54,9 @@ export class Computed<T> extends Derived<T> {
 			return;
 		}
 
-		// Holding the version still stops propagation at this node.
-		if (!this._equals(this._value, next)) {
+		// Holding the version still stops propagation at this node. A touch
+		// passes through even when the result is the same object.
+		if (this._touched || !this._equals(this._value, next)) {
 			this._value = next;
 			this._version++;
 		}
